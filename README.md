@@ -1,9 +1,9 @@
 # flatten.sh
 
-##Usage
+## Usage
 `./flatten.sh <<infile>>`
 
-##Description
+## Description
 `flatten.sh` replaces all lines starting with `. somefile` or `source somefile`
 with the functions contained in "somefile" **IF** they are used infile.
 
@@ -21,7 +21,7 @@ with the contents of the file specified after `:`.
 DO NOT put comments on the same line!  
 This is useful to unconditionally include things.
 
-##Installation
+## Installation
 Copy `flatten.sh` to your `$HOME/bin` and `indentme.vim` to `.vim/scripts`.
 
 Add the following function to your `.bash_aliases` for convenience:
