@@ -50,16 +50,19 @@ infile="${1?Need a file please}"
 needed_funcs=''
 processed_funcs=''
 
+declare -A floc
+
 #=== Functions =================================================================
 _subfuncs () {
   local my_subfunc="$1"
+  local my_subfunc_location="$2"
   local sub_items
   local test_me
   local item
   needed_funcs+=" $my_subfunc"
   # Does my_subfunc need any other functions?
   # Get the function definition (loosing any comments):
-  test_me="$(declare -f "$my_subfunc")"
+  test_me="$(_get_fn_def "$my_subfunc" "$my_subfunc_location")"
   # "${test_me//$my_subfunc/}" eliminates the current function from
   # the list of subfunctions to prevent endless loops.
   test_me="${test_me//$my_subfunc/}"
@@ -86,11 +89,28 @@ _subfuncs () {
   done
 } # ----------  end of function _subfuncs  ----------
 
+_get_fn_location () {
+  local file2source
+  # The invocation env -i bash --noprofile --norc is meant to prevent bash
+  # from reading any initialization files.
+  # Otherwise, you might get functions defined in, e.g., ~/.bashrc.
+  # ':' are not allowed in func-names, so I'm using :: as a separator
+  env -i bash --norc --noprofile -c '
+  shopt -s extdebug;
+  source "'"$file2source"'";
+  declare -F \
+    | cut -d " " -f3 \
+    | while read fname; do declare -F $fname; done \
+    | cut -d " " -f1,3 \
+    | sed "s/ /::/"
+  '
+}
+
 _get_fn_def () { # Keep the comments contained in the function definition.
   local fn_name="$1"
+  local fn_location="$2"
   # In what file is my function defined?  This needs 'shopt -s extdebug'
   shopt -s extdebug
-  location="$(declare -F "$fn_name"| cut --delimiter=' ' --fields=3 )"
   # 'grep'-output will be the function definition plus a trailing nullbyte.
   # The nullbyte is needed, so grep can slurp the whole file
   # and do multi-line matching.
@@ -101,7 +121,7 @@ _get_fn_def () { # Keep the comments contained in the function definition.
     --null-data \
     --only-matching \
     --perl-regexp \
-    "${fn_name}.*(\{([^{}]++|(?1))*\}.*)" "$location" \
+    "${fn_name}.*(\{([^{}]++|(?1))*\}.*)" "$fn_location" \
     | sed 's/\(}*\)\x0$/\1/' )"
   shopt -u extdebug
 }
@@ -109,18 +129,21 @@ _get_fn_def () { # Keep the comments contained in the function definition.
 #=== Main ======================================================================
 while IFS= read -r line; do
   if echo "$line" | grep --quiet --extended-regexp '^(\.|source) '; then
-    # Found a file to be sourced, so do!
+    # Found a file to be sourced
     my_file="${line#* }" # equivalent to cut -d ' ' -f2-
-    source "$my_file"
-    # Find out which functions are declared in it.
-    my_lib_funcs="$(declare -F| cut --delimiter=' ' --fields=3)"
+    # get the function-names and locations
+		for func_and_loc in $(_get_fn_location "$my_file") ; do
+			key="${func_and_loc%%::*}"
+			value="${func_and_loc#*::}"
+			floc[$key]="$value"
+		done
     # Iterate over said functions and work with those needed by infile.
-    for item in $my_lib_funcs; do
+    for item in ${!floc[@]}; do
       if sed -e '/^[[:space:]]*#/d' -e 's/ # .*$//' "$infile" \
         | grep --extended-regexp --invert-match '^(\.|source) '\
         | grep --quiet --fixed-strings "$item" ; then
         # Add the function and all the functions it needs to "needed_funcs".
-        _subfuncs "$item"
+        _subfuncs "$item" "${floc[$item]}"
       fi
     done
     # Make sure every function is in the list only once.
@@ -128,7 +151,7 @@ while IFS= read -r line; do
     for item in $needed_funcs ; do
       regex="$(echo $processed_funcs | xargs | tr ' ' '|')"
       if [[ ! $item =~ ^($regex)$ ]]; then
-        _get_fn_def "$item"
+        _get_fn_def "$item" "${floc[$item]}"
         # Safeguard against functions defined in multiple sourced files.
         # First declarations wins.  DO NOT RESET.
         processed_funcs+=" ${item}"
