@@ -90,7 +90,7 @@ _subfuncs () {
 } # ----------  end of function _subfuncs  ----------
 
 _get_fn_location () {
-  local file2source
+  local file2source="$1"
   # The invocation env -i bash --noprofile --norc is meant to prevent bash
   # from reading any initialization files.
   # Otherwise, you might get functions defined in, e.g., ~/.bashrc.
