@@ -141,7 +141,7 @@ while IFS= read -r line; do
     for item in ${!floc[@]}; do
       if sed -e '/^[[:space:]]*#/d' -e 's/ # .*$//' "$infile" \
         | grep --extended-regexp --invert-match '^(\.|source) '\
-        | grep --quiet --fixed-strings "$item" ; then
+        | grep --quiet --fixed-strings --word-regexp "$item" ; then
         # Add the function and all the functions it needs to "needed_funcs".
         _subfuncs "$item" "${floc[$item]}"
       fi
